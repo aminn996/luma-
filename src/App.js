@@ -136,6 +136,26 @@ function App() {
       return [];
     }
   });
+  const [sharedOrders, setSharedOrders] = useState([]);
+  const [ordersError, setOrdersError] = useState(false);
+
+  useEffect(() => {
+    if (!isAdmin || !adminUnlocked) return undefined;
+    let cancelled = false;
+    fetch('/api/orders')
+      .then((response) => {
+        if (!response.ok) throw new Error('Unable to load orders');
+        return response.json();
+      })
+      .then((data) => {
+        if (!cancelled) setSharedOrders(data.orders || []);
+      })
+      .catch(() => {
+        if (!cancelled) setOrdersError(true);
+      });
+    return () => { cancelled = true; };
+  }, [isAdmin, adminUnlocked]);
+
   useEffect(() => {
     function syncReservations(event) {
       if (event.key !== 'luma-reservations') return;
@@ -202,29 +222,25 @@ function App() {
     event.currentTarget.reset();
   }
 
-  function handleMenuOrder({ name, tableNumber, items }) {
-    const order = {
-      id: Date.now(),
-      name,
-      tableNumber,
-      guests: 'Food order',
-      date: 'Today',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      items,
-      createdAt: new Date().toISOString(),
-    };
-    const nextReservations = [order, ...reservations];
-    window.localStorage.setItem('luma-reservations', JSON.stringify(nextReservations));
-    setReservations(nextReservations);
+  async function handleMenuOrder({ name, tableNumber, items }) {
+    const response = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, tableNumber, items }),
+    });
+    if (!response.ok) throw new Error('Unable to save order');
+    const { order } = await response.json();
     const message = [
       'New Luma food order',
       `Customer: ${name}`,
       `Table: ${tableNumber}`,
       'Order:',
       ...items.map((item) => `${item.quantity} x ${item.name} - ${item.price}`),
-    ].join('\n');
+    ].join('\\n');
     window.open(`https://wa.me/21697337588?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    return order;
   }
+
 
   if (isAdmin) {
     if (!adminUnlocked) {
@@ -233,7 +249,16 @@ function App() {
         setAdminUnlocked(true);
       }} />;
     }
-    return <AdminPanel reservations={reservations} onBack={closeAdmin} onClear={() => {
+    const databaseOrders = sharedOrders.map((order) => ({
+      id: `order-${order.id}`,
+      name: order.customer_name,
+      tableNumber: order.table_number,
+      guests: 'Food order',
+      date: new Date(order.created_at).toLocaleDateString(),
+      time: new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      items: order.items,
+    }));
+    return <AdminPanel reservations={[...databaseOrders, ...reservations]} ordersError={ordersError} onBack={closeAdmin} onClear={() => {
       window.localStorage.removeItem('luma-reservations');
       setReservations([]);
     }} onLock={() => {
@@ -299,18 +324,23 @@ function MenuPage({ categories, category, setCategory, filteredMenu, onBack, onO
     setCart((currentCart) => currentCart.flatMap((item) => item.name === itemName ? (item.quantity > 1 ? [{ ...item, quantity: item.quantity - 1 }] : []) : [item]));
   }
 
-  function submitOrder(event) {
+  async function submitOrder(event) {
     event.preventDefault();
     if (!cart.length) {
       setOrderError(true);
       return;
     }
     const formData = new FormData(event.currentTarget);
-    onOrder({ name: formData.get('name'), tableNumber: formData.get('tableNumber'), items: cart });
-    setCart([]);
-    setOrderSent(true);
-    setOrderError(false);
-    event.currentTarget.reset();
+    try {
+      await onOrder({ name: formData.get('name'), tableNumber: formData.get('tableNumber'), items: cart });
+      setCart([]);
+      setOrderSent(true);
+      setOrderError(false);
+      event.currentTarget.reset();
+    } catch {
+      setOrderError(true);
+    }
+
   }
 
   return (
@@ -362,7 +392,7 @@ function AdminLogin({ onBack, onUnlock }) {
   );
 }
 
-function AdminPanel({ reservations, onBack, onClear, onLock }) {
+function AdminPanel({ reservations, ordersError, onBack, onClear, onLock }) {
   return (
     <div className="admin-shell">
       <header className="admin-header">
@@ -370,8 +400,10 @@ function AdminPanel({ reservations, onBack, onClear, onLock }) {
         <div className="admin-actions"><button className="admin-lock" type="button" onClick={onLock}>Lock</button><button className="button button-outline" type="button" onClick={onBack}>Back to site <span>↗</span></button></div>
       </header>
       <main className="admin-content">
-        <div className="section-kicker">Admin profile / Reservations</div>
-        <div className="admin-title-row"><div><h1>Reservation<br /><em>requests.</em></h1><p>Every request submitted from this browser appears here.</p></div><strong className="admin-count">{reservations.length}<small>total requests</small></strong></div>
+        <div className="section-kicker">Admin profile / Orders</div>
+        <div className="admin-title-row"><div><h1>Incoming<br /><em>requests.</em></h1><p>Food orders are shared across devices through the database.</p></div><strong className="admin-count">{reservations.length}<small>total requests</small></strong></div>
+        {ordersError && <p className="admin-login-error" role="alert">Could not load shared orders. Please refresh and try again.</p>}
+
         {reservations.length === 0 ? <div className="admin-empty">No reservation requests yet.</div> : <div className="reservation-list">{reservations.map((reservation) => <article className="reservation-row" key={reservation.id}><div><strong>{reservation.name}</strong><span>{reservation.guests}</span>{reservation.items && <span>{reservation.items.map((item) => `${item.quantity} x ${item.name}`).join(', ')}</span>}</div><div><strong>Table {reservation.tableNumber || 'not specified'}</strong><span>{reservation.date} · {reservation.time}</span></div><a className="button button-dark" href={`https://wa.me/21697337588?text=${encodeURIComponent(`Follow up with ${reservation.name} at table ${reservation.tableNumber || 'not specified'}`)}`} target="_blank" rel="noreferrer">WhatsApp <span>↗</span></a></article>)}</div>}
         {reservations.length > 0 && <button className="admin-clear" type="button" onClick={onClear}>Clear local requests</button>}
       </main>
