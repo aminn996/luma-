@@ -35,11 +35,16 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ orders: result.rows });
   }
   if (req.method === 'DELETE') {
-    const id = Number(req.query?.id);
-    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid order id.' });
-    const result = await pool.query('DELETE FROM luma_orders WHERE id = $1 RETURNING id', [id]);
+    const id = req.query?.id;
+    if (id === 'all') {
+      const result = await pool.query('DELETE FROM luma_orders');
+      return res.status(200).json({ deleted: result.rowCount || 0 });
+    }
+    const orderId = Number(id);
+    if (!Number.isInteger(orderId) || orderId < 1) return res.status(400).json({ error: 'Invalid order id.' });
+    const result = await pool.query('DELETE FROM luma_orders WHERE id = $1 RETURNING id', [orderId]);
     if (!result.rowCount) return res.status(404).json({ error: 'Order not found.' });
-    return res.status(200).json({ deleted: id });
+    return res.status(200).json({ deleted: orderId });
   }
   res.setHeader('Allow', 'DELETE, GET, POST');
   return res.status(405).json({ error: 'Method not allowed.' });

@@ -301,9 +301,12 @@ function App() {
       const response = await fetch(`/api/orders?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Unable to delete order');
       setSharedOrders((current) => current.filter((order) => order.id !== id));
-    }} onClear={() => {
+    }} onClear={async () => {
+      const response = await fetch('/api/orders?id=all', { method: 'DELETE' });
+      if (!response.ok) throw new Error('Unable to clear orders');
       window.localStorage.removeItem('luma-reservations');
       setReservations([]);
+      setSharedOrders([]);
     }} onLock={() => {
       window.sessionStorage.removeItem('luma-admin-unlocked');
       setAdminUnlocked(false);
@@ -451,6 +454,7 @@ function AdminLogin({ onBack, onUnlock }) {
 }
 
 function AdminPanel({ reservations, ordersError, onBack, onDelete, onClear, onLock }) {
+  const [clearError, setClearError] = useState(false);
   const orders = reservations.filter((reservation) => Array.isArray(reservation.items));
   const accounting = getAccountingSummary(orders);
 
@@ -477,7 +481,7 @@ function AdminPanel({ reservations, ordersError, onBack, onDelete, onClear, onLo
         </section>
 
         {reservations.length === 0 ? <div className="admin-empty">No reservation requests yet.</div> : <div className="reservation-list">{reservations.map((reservation) => <article className="reservation-row" key={reservation.id}><div><strong>{reservation.name}</strong><span>{reservation.guests}</span>{reservation.items && <span>{reservation.items.map((item) => `${item.quantity} x ${item.name}`).join(', ')}</span>}{reservation.allergyNotes && <span className="allergy-note"><strong>Kitchen note:</strong> {reservation.allergyNotes}</span>}</div><div><strong>Table {reservation.tableNumber || 'not specified'}</strong><span>{reservation.date} · {reservation.time}</span></div><div className="reservation-actions"><a className="button button-dark" href={`https://wa.me/21697337588?text=${encodeURIComponent(`Follow up with ${reservation.name} at table ${reservation.tableNumber || 'not specified'}`)}`} target="_blank" rel="noreferrer">WhatsApp <span>↗</span></a>{reservation.sharedId && <button className="admin-delete" type="button" onClick={() => { if (window.confirm('Remove this order from the dashboard?')) onDelete(reservation.sharedId).catch(() => undefined); }}>Remove</button>}</div></article>)}</div>}
-        {reservations.length > 0 && <button className="admin-clear" type="button" onClick={onClear}>Clear local requests</button>}
+        {reservations.length > 0 && <><button className="admin-clear" type="button" onClick={async () => { if (!window.confirm('Delete all orders and local requests?')) return; try { setClearError(false); await onClear(); } catch { setClearError(true); } }}>Clear all orders</button>{clearError && <p className="admin-login-error" role="alert">Could not clear orders. Please try again.</p>}</>}
       </main>
     </div>
   );
