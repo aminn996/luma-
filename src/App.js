@@ -123,6 +123,28 @@ const categoryCards = [
 
 const ADMIN_PASSWORD = 'luma-admin-2026';
 
+function priceInDt(price) {
+  const amount = Number.parseFloat(String(price).replace(',', '.'));
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function getAccountingSummary(orders) {
+  const itemTotals = new Map();
+  let revenue = 0;
+  let itemCount = 0;
+  orders.forEach((order) => {
+    (order.items || []).forEach((item) => {
+      const quantity = Number(item.quantity) || 0;
+      const lineTotal = priceInDt(item.price) * quantity;
+      revenue += lineTotal;
+      itemCount += quantity;
+      itemTotals.set(item.name, (itemTotals.get(item.name) || 0) + quantity);
+    });
+  });
+  const topItem = [...itemTotals.entries()].sort((a, b) => b[1] - a[1])[0];
+  return { revenue, itemCount, topItem: topItem ? `${topItem[0]} (${topItem[1]})` : '—' };
+}
+
 function App() {
   const [category, setCategory] = useState('All');
   const [reservationSent, setReservationSent] = useState(false);
@@ -136,6 +158,26 @@ function App() {
       return [];
     }
   });
+  const [sharedOrders, setSharedOrders] = useState([]);
+  const [ordersError, setOrdersError] = useState(false);
+
+  useEffect(() => {
+    if (!isAdmin || !adminUnlocked) return undefined;
+    let cancelled = false;
+    fetch('/api/orders')
+      .then((response) => {
+        if (!response.ok) throw new Error('Unable to load orders');
+        return response.json();
+      })
+      .then((data) => {
+        if (!cancelled) setSharedOrders(data.orders || []);
+      })
+      .catch(() => {
+        if (!cancelled) setOrdersError(true);
+      });
+    return () => { cancelled = true; };
+  }, [isAdmin, adminUnlocked]);
+
   useEffect(() => {
     function syncReservations(event) {
       if (event.key !== 'luma-reservations') return;
@@ -202,29 +244,25 @@ function App() {
     event.currentTarget.reset();
   }
 
-  function handleMenuOrder({ name, tableNumber, items }) {
-    const order = {
-      id: Date.now(),
-      name,
-      tableNumber,
-      guests: 'Food order',
-      date: 'Today',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      items,
-      createdAt: new Date().toISOString(),
-    };
-    const nextReservations = [order, ...reservations];
-    window.localStorage.setItem('luma-reservations', JSON.stringify(nextReservations));
-    setReservations(nextReservations);
+  async function handleMenuOrder({ name, tableNumber, items }) {
+    const response = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, tableNumber, items }),
+    });
+    if (!response.ok) throw new Error('Unable to save order');
+    const { order } = await response.json();
     const message = [
       'New Luma food order',
       `Customer: ${name}`,
       `Table: ${tableNumber}`,
       'Order:',
       ...items.map((item) => `${item.quantity} x ${item.name} - ${item.price}`),
-    ].join('\n');
+    ].join('\\n');
     window.open(`https://wa.me/21697337588?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    return order;
   }
+
 
   if (isAdmin) {
     if (!adminUnlocked) {
@@ -233,7 +271,16 @@ function App() {
         setAdminUnlocked(true);
       }} />;
     }
-    return <AdminPanel reservations={reservations} onBack={closeAdmin} onClear={() => {
+    const databaseOrders = sharedOrders.map((order) => ({
+      id: `order-${order.id}`,
+      name: order.customer_name,
+      tableNumber: order.table_number,
+      guests: 'Food order',
+      date: new Date(order.created_at).toLocaleDateString(),
+      time: new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      items: order.items,
+    }));
+    return <AdminPanel reservations={[...databaseOrders, ...reservations]} ordersError={ordersError} onBack={closeAdmin} onClear={() => {
       window.localStorage.removeItem('luma-reservations');
       setReservations([]);
     }} onLock={() => {
@@ -299,18 +346,23 @@ function MenuPage({ categories, category, setCategory, filteredMenu, onBack, onO
     setCart((currentCart) => currentCart.flatMap((item) => item.name === itemName ? (item.quantity > 1 ? [{ ...item, quantity: item.quantity - 1 }] : []) : [item]));
   }
 
-  function submitOrder(event) {
+  async function submitOrder(event) {
     event.preventDefault();
     if (!cart.length) {
       setOrderError(true);
       return;
     }
     const formData = new FormData(event.currentTarget);
-    onOrder({ name: formData.get('name'), tableNumber: formData.get('tableNumber'), items: cart });
-    setCart([]);
-    setOrderSent(true);
-    setOrderError(false);
-    event.currentTarget.reset();
+    try {
+      await onOrder({ name: formData.get('name'), tableNumber: formData.get('tableNumber'), items: cart });
+      setCart([]);
+      setOrderSent(true);
+      setOrderError(false);
+      event.currentTarget.reset();
+    } catch {
+      setOrderError(true);
+    }
+
   }
 
   return (
@@ -362,16 +414,32 @@ function AdminLogin({ onBack, onUnlock }) {
   );
 }
 
-function AdminPanel({ reservations, onBack, onClear, onLock }) {
+function AdminPanel({ reservations, ordersError, onBack, onClear, onLock }) {
+  const orders = reservations.filter((reservation) => Array.isArray(reservation.items));
+  const accounting = getAccountingSummary(orders);
+
   return (
+
     <div className="admin-shell">
       <header className="admin-header">
         <a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-HwESmG9hmyji1cEdKLVdsOZT40ZIfs.jpeg" alt="Lüma Kitchen & More" /></a>
         <div className="admin-actions"><button className="admin-lock" type="button" onClick={onLock}>Lock</button><button className="button button-outline" type="button" onClick={onBack}>Back to site <span>↗</span></button></div>
       </header>
       <main className="admin-content">
-        <div className="section-kicker">Admin profile / Reservations</div>
-        <div className="admin-title-row"><div><h1>Reservation<br /><em>requests.</em></h1><p>Every request submitted from this browser appears here.</p></div><strong className="admin-count">{reservations.length}<small>total requests</small></strong></div>
+        <div className="section-kicker">Admin profile / Orders</div>
+        <div className="admin-title-row"><div><h1>Incoming<br /><em>requests.</em></h1><p>Food orders are shared across devices through the database.</p></div><strong className="admin-count">{reservations.length}<small>total requests</small></strong></div>
+        {ordersError && <p className="admin-login-error" role="alert">Could not load shared orders. Please refresh and try again.</p>}
+        <section className="accounting-panel" aria-labelledby="accounting-title">
+          <div className="accounting-heading"><div><div className="section-kicker">Comptabilité / Overview</div><h2 id="accounting-title">Today&apos;s <em>numbers.</em></h2></div><span className="accounting-period">{orders.length} paid-order records</span></div>
+          <div className="accounting-grid">
+            <article className="accounting-card"><span>Estimated revenue</span><strong>{accounting.revenue.toFixed(2)} DT</strong><small>Based on menu prices</small></article>
+            <article className="accounting-card"><span>Orders received</span><strong>{orders.length}</strong><small>Shared across devices</small></article>
+            <article className="accounting-card"><span>Items sold</span><strong>{accounting.itemCount}</strong><small>Total quantities</small></article>
+            <article className="accounting-card"><span>Best seller</span><strong className="accounting-best-seller">{accounting.topItem}</strong><small>By quantity ordered</small></article>
+          </div>
+          <p className="accounting-note">This is an operational sales summary, not a tax report. Confirm payments and expenses before filing accounts.</p>
+        </section>
+
         {reservations.length === 0 ? <div className="admin-empty">No reservation requests yet.</div> : <div className="reservation-list">{reservations.map((reservation) => <article className="reservation-row" key={reservation.id}><div><strong>{reservation.name}</strong><span>{reservation.guests}</span>{reservation.items && <span>{reservation.items.map((item) => `${item.quantity} x ${item.name}`).join(', ')}</span>}</div><div><strong>Table {reservation.tableNumber || 'not specified'}</strong><span>{reservation.date} · {reservation.time}</span></div><a className="button button-dark" href={`https://wa.me/21697337588?text=${encodeURIComponent(`Follow up with ${reservation.name} at table ${reservation.tableNumber || 'not specified'}`)}`} target="_blank" rel="noreferrer">WhatsApp <span>↗</span></a></article>)}</div>}
         {reservations.length > 0 && <button className="admin-clear" type="button" onClick={onClear}>Clear local requests</button>}
       </main>
