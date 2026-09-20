@@ -17,23 +17,31 @@ module.exports = async function handler(req, res) {
   if (req.method === 'POST') {
     const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 120) : '';
     const tableNumber = Number(req.body?.tableNumber);
+    const allergyNotes = typeof req.body?.allergyNotes === 'string' ? req.body.allergyNotes.trim().slice(0, 500) : '';
     const items = parseItems(req.body?.items);
     if (!name || !Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 999 || !items) {
       return res.status(400).json({ error: 'Invalid order details.' });
     }
     const result = await pool.query(
-      'INSERT INTO luma_orders (customer_name, table_number, items) VALUES ($1, $2, $3::jsonb) RETURNING id, customer_name, table_number, items, created_at',
-      [name, tableNumber, JSON.stringify(items)],
+      'INSERT INTO luma_orders (customer_name, table_number, items, allergy_notes) VALUES ($1, $2, $3::jsonb, $4) RETURNING id, customer_name, table_number, items, allergy_notes, created_at',
+      [name, tableNumber, JSON.stringify(items), allergyNotes],
     );
     return res.status(201).json({ order: result.rows[0] });
   }
   if (req.method === 'GET') {
     const result = await pool.query(
-      'SELECT id, customer_name, table_number, items, created_at FROM luma_orders ORDER BY created_at DESC LIMIT 200',
+      'SELECT id, customer_name, table_number, items, allergy_notes, created_at FROM luma_orders ORDER BY created_at DESC LIMIT 200',
     );
     return res.status(200).json({ orders: result.rows });
   }
-  res.setHeader('Allow', 'GET, POST');
+  if (req.method === 'DELETE') {
+    const id = Number(req.query?.id);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid order id.' });
+    const result = await pool.query('DELETE FROM luma_orders WHERE id = $1 RETURNING id', [id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Order not found.' });
+    return res.status(200).json({ deleted: id });
+  }
+  res.setHeader('Allow', 'DELETE, GET, POST');
   return res.status(405).json({ error: 'Method not allowed.' });
 };
 

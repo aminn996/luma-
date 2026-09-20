@@ -150,6 +150,8 @@ function App() {
   const [reservationSent, setReservationSent] = useState(false);
   const [isAdmin, setIsAdmin] = useState(() => window.location.hash === '#admin');
   const [isMenuPage, setIsMenuPage] = useState(() => window.location.hash === '#menu-page');
+  const [isGalleryPage, setIsGalleryPage] = useState(() => window.location.hash === '#gallery-page');
+
   const [adminUnlocked, setAdminUnlocked] = useState(() => window.sessionStorage.getItem('luma-admin-unlocked') === 'true');
   const [reservations, setReservations] = useState(() => {
     try {
@@ -164,18 +166,18 @@ function App() {
   useEffect(() => {
     if (!isAdmin || !adminUnlocked) return undefined;
     let cancelled = false;
-    fetch('/api/orders')
+    const loadOrders = () => fetch('/api/orders')
       .then((response) => {
         if (!response.ok) throw new Error('Unable to load orders');
         return response.json();
       })
       .then((data) => {
-        if (!cancelled) setSharedOrders(data.orders || []);
+        if (!cancelled) { setSharedOrders(data.orders || []); setOrdersError(false); }
       })
-      .catch(() => {
-        if (!cancelled) setOrdersError(true);
-      });
-    return () => { cancelled = true; };
+      .catch(() => { if (!cancelled) setOrdersError(true); });
+    loadOrders();
+    const refreshTimer = window.setInterval(loadOrders, 15000);
+    return () => { cancelled = true; window.clearInterval(refreshTimer); };
   }, [isAdmin, adminUnlocked]);
 
   useEffect(() => {
@@ -218,6 +220,19 @@ function App() {
     setIsMenuPage(false);
   }
 
+  function openGallery(event) {
+    event.preventDefault();
+    window.history.pushState({}, '', '#gallery-page');
+    setIsGalleryPage(true);
+  }
+
+  function closeGallery(event) {
+    event.preventDefault();
+    window.history.pushState({}, '', '#home');
+    setIsGalleryPage(false);
+  }
+
+
   function handleReservation(event) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -244,11 +259,11 @@ function App() {
     event.currentTarget.reset();
   }
 
-  async function handleMenuOrder({ name, tableNumber, items }) {
+  async function handleMenuOrder({ name, tableNumber, allergyNotes, items }) {
     const response = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, tableNumber, items }),
+      body: JSON.stringify({ name, tableNumber, allergyNotes, items }),
     });
     if (!response.ok) throw new Error('Unable to save order');
     const { order } = await response.json();
@@ -279,8 +294,14 @@ function App() {
       date: new Date(order.created_at).toLocaleDateString(),
       time: new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       items: order.items,
+      allergyNotes: order.allergy_notes,
+      sharedId: order.id,
     }));
-    return <AdminPanel reservations={[...databaseOrders, ...reservations]} ordersError={ordersError} onBack={closeAdmin} onClear={() => {
+    return <AdminPanel reservations={[...databaseOrders, ...reservations]} ordersError={ordersError} onBack={closeAdmin} onDelete={async (id) => {
+      const response = await fetch(`/api/orders?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Unable to delete order');
+      setSharedOrders((current) => current.filter((order) => order.id !== id));
+    }} onClear={() => {
       window.localStorage.removeItem('luma-reservations');
       setReservations([]);
     }} onLock={() => {
@@ -293,11 +314,16 @@ function App() {
     return <MenuPage categories={categories} category={category} setCategory={setCategory} filteredMenu={filteredMenu} onBack={closeMenu} onOrder={handleMenuOrder} />;
   }
 
+  if (isGalleryPage) {
+    return <GalleryPage images={galleryImages} onBack={closeGallery} />;
+  }
+
+
   return (
     <div className="site-shell">
       <header className="topbar">
         <a className="wordmark" href="#home" aria-label="Lüma home"><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-HwESmG9hmyji1cEdKLVdsOZT40ZIfs.jpeg" alt="Lüma Kitchen & More" /></a>
-        <nav className="nav-links" aria-label="Main navigation"><a href="#home">Home</a><a href="#menu-page" onClick={openMenu}>Menu</a><a href="#about">About</a><a href="#gallery">Gallery</a><a href="#contact">Contact</a></nav>
+        <nav className="nav-links" aria-label="Main navigation"><a href="#home">Home</a><a href="#menu-page" onClick={openMenu}>Menu</a><a href="#about">About</a><a href="#gallery-page" onClick={openGallery}>Gallery</a><a href="#contact">Contact</a></nav>
         <a className="nav-cta" href="#reservation">Book a table <span>↘</span></a>
       </header>
 
@@ -312,7 +338,6 @@ function App() {
 
         <section className="special section-wrap"><div className="special-image" style={{ backgroundImage: `url("${images.fruitsDeMer}")` }} /><div className="special-copy"><div className="section-kicker">03 / Chef’s special</div><h2>Fruits de mer<br /><em>à l’ail.</em></h2><p>Fresh seafood, garlic, parsley and a little fire. A plate that brings the coast to El Kef.</p><div className="special-price">29 DT</div><a className="button button-dark" href="#reservation">Order now <span>↗</span></a></div></section>
 
-        <section className="gallery section-wrap" id="gallery"><div className="gallery-heading"><div className="section-kicker">04 / Gallery</div><h2>A little look<br /><em>inside.</em></h2></div><div className="gallery-grid">{galleryImages.map((image, index) => <a className={`gallery-photo gallery-photo-${index + 1}`} href={image} target="_blank" rel="noreferrer" key={image}><div style={{ backgroundImage: `url("${image}")` }} /></a>)}</div></section>
 
         <section className="testimonial"><div className="section-kicker">05 / What our clients say</div><div className="stars">★★★★★</div><blockquote>“Amazing food, beautiful atmosphere and the warmest welcome in El Kef.”</blockquote><p>— A Lüma table guest</p></section>
 
@@ -324,6 +349,10 @@ function App() {
       <footer><a className="wordmark" href="#home"><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-HwESmG9hmyji1cEdKLVdsOZT40ZIfs.jpeg" alt="Lüma Kitchen & More" /></a><div className="socials"><a href="https://instagram.com/luma_italian_kitchen" target="_blank" rel="noreferrer">Instagram</a><a href="https://www.facebook.com/cocktail4saisons.kef/" target="_blank" rel="noreferrer">Facebook</a><a href="#contact">TikTok</a><a href="#admin" onClick={openAdmin}>Admin</a></div><p>© 2026 Lüma Kitchen &amp; More</p></footer>
     </div>
   );
+}
+
+function GalleryPage({ images, onBack }) {
+  return <div className="menu-page gallery-page"><header className="admin-header menu-page-header"><a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-HwESmG9hmyji1cEdKLVdsOZT40ZIfs.jpeg" alt="Lüma Kitchen & More" /></a><button className="button button-outline" type="button" onClick={onBack}>Back to site <span>↗</span></button></header><main className="menu-page-content"><div className="gallery-heading"><div><div className="section-kicker">Lüma / Gallery</div><h1>A little look<br /><em>inside.</em></h1></div><p className="gallery-page-intro">A visual journal of our kitchen, our tables and the moments that make Lüma feel like home.</p></div><div className="gallery-grid">{images.map((image, index) => <a className={`gallery-photo gallery-photo-${index + 1}`} href={image} target="_blank" rel="noreferrer" key={image}><div style={{ backgroundImage: `url("${image}")` }} /></a>)}</div></main></div>;
 }
 
 function MenuPage({ categories, category, setCategory, filteredMenu, onBack, onOrder }) {
@@ -354,7 +383,7 @@ function MenuPage({ categories, category, setCategory, filteredMenu, onBack, onO
     }
     const formData = new FormData(event.currentTarget);
     try {
-      await onOrder({ name: formData.get('name'), tableNumber: formData.get('tableNumber'), items: cart });
+      await onOrder({ name: formData.get('name'), tableNumber: formData.get('tableNumber'), allergyNotes: formData.get('allergyNotes'), items: cart });
       setCart([]);
       setOrderSent(true);
       setOrderError(false);
@@ -375,7 +404,7 @@ function MenuPage({ categories, category, setCategory, filteredMenu, onBack, onO
         <div className="center-heading"><div className="section-kicker">Lüma / Full menu</div><h1>Made with care,<br /><em>served with heart.</em></h1><p>From breakfast and coffee to wood-fired favourites in El Kef.</p></div>
         <div className="menu-tabs" role="tablist">{categories.map((item) => <button id={`menu-page-${item}`} className={category === item ? 'active' : ''} onClick={() => setCategory(item)} key={item}>{item}</button>)}</div>
         <div className="dish-grid menu-list">{filteredMenu.map((item) => <article className="dish-card" key={item.name}><div className="dish-content"><h2>{item.name}</h2><p>{item.description}</p><strong>{item.price}</strong><button className="menu-add" type="button" onClick={() => addToCart(item)}>Add to order <span>+</span></button></div></article>)}</div>
-        <aside className="order-panel"><div><div className="section-kicker">Your order</div><h2>{cart.length ? `${cart.reduce((total, item) => total + item.quantity, 0)} item${cart.reduce((total, item) => total + item.quantity, 0) === 1 ? '' : 's'}` : 'Choose your dishes'}</h2>{cart.length > 0 && <div className="order-items">{cart.map((item) => <div className="order-item" key={item.name}><span>{item.quantity} x {item.name}</span><button type="button" onClick={() => removeFromCart(item.name)} aria-label={`Remove one ${item.name}`}>−</button></div>)}</div>}</div><form className="order-form" onSubmit={submitOrder}><label>Name<input name="name" type="text" placeholder="Your full name" required /></label><label>Table number<input name="tableNumber" type="number" min="1" placeholder="e.g. 4" required /></label><button className="button button-dark" type="submit">Send order <span>↗</span></button>{orderError && <p className="order-error" role="alert">Add at least one dish first.</p>}{orderSent && <p className="reservation-success" role="status">Order sent. The team will contact your table.</p>}</form></aside>
+        <aside className="order-panel"><div><div className="section-kicker">Your order</div><h2>{cart.length ? `${cart.reduce((total, item) => total + item.quantity, 0)} item${cart.reduce((total, item) => total + item.quantity, 0) === 1 ? '' : 's'}` : 'Choose your dishes'}</h2>{cart.length > 0 && <div className="order-items">{cart.map((item) => <div className="order-item" key={item.name}><span>{item.quantity} x {item.name}</span><button type="button" onClick={() => removeFromCart(item.name)} aria-label={`Remove one ${item.name}`}>−</button></div>)}</div>}</div><form className="order-form" onSubmit={submitOrder}><label>Name<input name="name" type="text" placeholder="Your full name" required /></label><label>Table number<input name="tableNumber" type="number" min="1" placeholder="e.g. 4" required /></label><label className="order-notes-field">Allergies or special requests<textarea name="allergyNotes" maxLength="500" placeholder="Please tell our kitchen about allergies or anything else we should know" rows="3" /></label><button className="button button-dark" type="submit">Send order <span>↗</span></button>{orderError && <p className="order-error" role="alert">Add at least one dish first.</p>}{orderSent && <p className="reservation-success" role="status">Order sent. The team will contact your table.</p>}</form></aside>
         <a className="button button-dark menu-page-book" href="#reservation" onClick={onBack}>Book a table <span>↗</span></a>
       </main>
     </div>
@@ -414,7 +443,7 @@ function AdminLogin({ onBack, onUnlock }) {
   );
 }
 
-function AdminPanel({ reservations, ordersError, onBack, onClear, onLock }) {
+function AdminPanel({ reservations, ordersError, onBack, onDelete, onClear, onLock }) {
   const orders = reservations.filter((reservation) => Array.isArray(reservation.items));
   const accounting = getAccountingSummary(orders);
 
@@ -440,7 +469,7 @@ function AdminPanel({ reservations, ordersError, onBack, onClear, onLock }) {
           <p className="accounting-note">This is an operational sales summary, not a tax report. Confirm payments and expenses before filing accounts.</p>
         </section>
 
-        {reservations.length === 0 ? <div className="admin-empty">No reservation requests yet.</div> : <div className="reservation-list">{reservations.map((reservation) => <article className="reservation-row" key={reservation.id}><div><strong>{reservation.name}</strong><span>{reservation.guests}</span>{reservation.items && <span>{reservation.items.map((item) => `${item.quantity} x ${item.name}`).join(', ')}</span>}</div><div><strong>Table {reservation.tableNumber || 'not specified'}</strong><span>{reservation.date} · {reservation.time}</span></div><a className="button button-dark" href={`https://wa.me/21697337588?text=${encodeURIComponent(`Follow up with ${reservation.name} at table ${reservation.tableNumber || 'not specified'}`)}`} target="_blank" rel="noreferrer">WhatsApp <span>↗</span></a></article>)}</div>}
+        {reservations.length === 0 ? <div className="admin-empty">No reservation requests yet.</div> : <div className="reservation-list">{reservations.map((reservation) => <article className="reservation-row" key={reservation.id}><div><strong>{reservation.name}</strong><span>{reservation.guests}</span>{reservation.items && <span>{reservation.items.map((item) => `${item.quantity} x ${item.name}`).join(', ')}</span>}{reservation.allergyNotes && <span className="allergy-note"><strong>Kitchen note:</strong> {reservation.allergyNotes}</span>}</div><div><strong>Table {reservation.tableNumber || 'not specified'}</strong><span>{reservation.date} · {reservation.time}</span></div><div className="reservation-actions"><a className="button button-dark" href={`https://wa.me/21697337588?text=${encodeURIComponent(`Follow up with ${reservation.name} at table ${reservation.tableNumber || 'not specified'}`)}`} target="_blank" rel="noreferrer">WhatsApp <span>↗</span></a>{reservation.sharedId && <button className="admin-delete" type="button" onClick={() => { if (window.confirm('Remove this order from the dashboard?')) onDelete(reservation.sharedId).catch(() => undefined); }}>Remove</button>}</div></article>)}</div>}
         {reservations.length > 0 && <button className="admin-clear" type="button" onClick={onClear}>Clear local requests</button>}
       </main>
     </div>
