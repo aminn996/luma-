@@ -123,6 +123,28 @@ const categoryCards = [
 
 const ADMIN_PASSWORD = 'luma-admin-2026';
 
+function priceInDt(price) {
+  const amount = Number.parseFloat(String(price).replace(',', '.'));
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function getAccountingSummary(orders) {
+  const itemTotals = new Map();
+  let revenue = 0;
+  let itemCount = 0;
+  orders.forEach((order) => {
+    (order.items || []).forEach((item) => {
+      const quantity = Number(item.quantity) || 0;
+      const lineTotal = priceInDt(item.price) * quantity;
+      revenue += lineTotal;
+      itemCount += quantity;
+      itemTotals.set(item.name, (itemTotals.get(item.name) || 0) + quantity);
+    });
+  });
+  const topItem = [...itemTotals.entries()].sort((a, b) => b[1] - a[1])[0];
+  return { revenue, itemCount, topItem: topItem ? `${topItem[0]} (${topItem[1]})` : '—' };
+}
+
 function App() {
   const [category, setCategory] = useState('All');
   const [reservationSent, setReservationSent] = useState(false);
@@ -393,7 +415,11 @@ function AdminLogin({ onBack, onUnlock }) {
 }
 
 function AdminPanel({ reservations, ordersError, onBack, onClear, onLock }) {
+  const orders = reservations.filter((reservation) => Array.isArray(reservation.items));
+  const accounting = getAccountingSummary(orders);
+
   return (
+
     <div className="admin-shell">
       <header className="admin-header">
         <a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-HwESmG9hmyji1cEdKLVdsOZT40ZIfs.jpeg" alt="Lüma Kitchen & More" /></a>
@@ -403,6 +429,16 @@ function AdminPanel({ reservations, ordersError, onBack, onClear, onLock }) {
         <div className="section-kicker">Admin profile / Orders</div>
         <div className="admin-title-row"><div><h1>Incoming<br /><em>requests.</em></h1><p>Food orders are shared across devices through the database.</p></div><strong className="admin-count">{reservations.length}<small>total requests</small></strong></div>
         {ordersError && <p className="admin-login-error" role="alert">Could not load shared orders. Please refresh and try again.</p>}
+        <section className="accounting-panel" aria-labelledby="accounting-title">
+          <div className="accounting-heading"><div><div className="section-kicker">Comptabilité / Overview</div><h2 id="accounting-title">Today&apos;s <em>numbers.</em></h2></div><span className="accounting-period">{orders.length} paid-order records</span></div>
+          <div className="accounting-grid">
+            <article className="accounting-card"><span>Estimated revenue</span><strong>{accounting.revenue.toFixed(2)} DT</strong><small>Based on menu prices</small></article>
+            <article className="accounting-card"><span>Orders received</span><strong>{orders.length}</strong><small>Shared across devices</small></article>
+            <article className="accounting-card"><span>Items sold</span><strong>{accounting.itemCount}</strong><small>Total quantities</small></article>
+            <article className="accounting-card"><span>Best seller</span><strong className="accounting-best-seller">{accounting.topItem}</strong><small>By quantity ordered</small></article>
+          </div>
+          <p className="accounting-note">This is an operational sales summary, not a tax report. Confirm payments and expenses before filing accounts.</p>
+        </section>
 
         {reservations.length === 0 ? <div className="admin-empty">No reservation requests yet.</div> : <div className="reservation-list">{reservations.map((reservation) => <article className="reservation-row" key={reservation.id}><div><strong>{reservation.name}</strong><span>{reservation.guests}</span>{reservation.items && <span>{reservation.items.map((item) => `${item.quantity} x ${item.name}`).join(', ')}</span>}</div><div><strong>Table {reservation.tableNumber || 'not specified'}</strong><span>{reservation.date} · {reservation.time}</span></div><a className="button button-dark" href={`https://wa.me/21697337588?text=${encodeURIComponent(`Follow up with ${reservation.name} at table ${reservation.tableNumber || 'not specified'}`)}`} target="_blank" rel="noreferrer">WhatsApp <span>↗</span></a></article>)}</div>}
         {reservations.length > 0 && <button className="admin-clear" type="button" onClick={onClear}>Clear local requests</button>}
