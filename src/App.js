@@ -249,7 +249,7 @@ function App() {
   return (
     <div className="site-shell">
       <header className="topbar">
-        <a className="wordmark" href="#home" aria-label="Lüma home"><img className="wordmark-logo" src="/luma assest/luma.jpeg" alt="Lüma Kitchen & More" /></a>
+        <a className="wordmark" href="#home" aria-label="Lüma home"><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-sSfcr6vU2jHTsZ1A92euvDQ8RO6RpS.jpeg" alt="Lüma Kitchen & More" /></a>
         <nav className="nav-links" aria-label="Main navigation"><a href="#home">Home</a><a href="#menu-page" onClick={openMenu}>Menu</a><a href="#about">About</a><a href="#gallery">Gallery</a><a href="#contact">Contact</a></nav>
         <a className="nav-cta" href="#reservation">Book a table <span>↘</span></a>
       </header>
@@ -274,7 +274,7 @@ function App() {
         <section className="contact section-wrap" id="contact"><div className="contact-heading"><div className="section-kicker">07 / Contact</div><h2>Come<br /><em>say hello.</em></h2></div><div className="contact-details"><div><span>Address</span><strong>5PH4+7V, El Kef<br />Tunisia</strong></div><div><span>Phone</span><strong><a href="tel:+21697337588">97 337 588</a></strong></div><div><span>Opening hours</span><strong>Lunch · 12h–15h<br />Dinner · 19h–00h</strong></div><a className="button button-outline" href="https://maps.google.com/?q=5PH4%2B7V%20El%20Kef%20Tunisie" target="_blank" rel="noreferrer">Open map <span>↗</span></a></div></section>
       </main>
 
-      <footer><a className="wordmark" href="#home"><img className="wordmark-logo" src="/luma assest/luma.jpeg" alt="Lüma Kitchen & More" /></a><div className="socials"><a href="https://instagram.com/luma_italian_kitchen" target="_blank" rel="noreferrer">Instagram</a><a href="https://www.facebook.com/cocktail4saisons.kef/" target="_blank" rel="noreferrer">Facebook</a><a href="#contact">TikTok</a><a href="#admin" onClick={openAdmin}>Admin</a></div><p>© 2026 Lüma Kitchen &amp; More</p></footer>
+      <footer><a className="wordmark" href="#home"><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-sSfcr6vU2jHTsZ1A92euvDQ8RO6RpS.jpeg" alt="Lüma Kitchen & More" /></a><div className="socials"><a href="https://instagram.com/luma_italian_kitchen" target="_blank" rel="noreferrer">Instagram</a><a href="https://www.facebook.com/cocktail4saisons.kef/" target="_blank" rel="noreferrer">Facebook</a><a href="#contact">TikTok</a><a href="#admin" onClick={openAdmin}>Admin</a></div><p>© 2026 Lüma Kitchen &amp; More</p></footer>
     </div>
   );
 }
@@ -316,7 +316,7 @@ function MenuPage({ categories, category, setCategory, filteredMenu, onBack, onO
   return (
     <div className="menu-page">
       <header className="admin-header menu-page-header">
-        <a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="/luma assest/luma.jpeg" alt="Lüma Kitchen & More" /></a>
+        <a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-sSfcr6vU2jHTsZ1A92euvDQ8RO6RpS.jpeg" alt="Lüma Kitchen & More" /></a>
         <button className="button button-outline" type="button" onClick={onBack}>Back to site <span>↗</span></button>
       </header>
       <main className="menu-page-content">
@@ -347,7 +347,7 @@ function AdminLogin({ onBack, onUnlock }) {
   return (
     <div className="admin-shell admin-login-shell">
       <main className="admin-login">
-        <a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="/luma assest/luma.jpeg" alt="Lüma Kitchen & More" /></a>
+        <a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-sSfcr6vU2jHTsZ1A92euvDQ8RO6RpS.jpeg" alt="Lüma Kitchen & More" /></a>
         <div className="section-kicker">Private area</div>
         <h1>Admin<br /><em>access.</em></h1>
         <form onSubmit={handleLogin}>
@@ -366,7 +366,7 @@ function AdminPanel({ reservations, onBack, onClear, onLock }) {
   return (
     <div className="admin-shell">
       <header className="admin-header">
-        <a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="/luma assest/luma.jpeg" alt="Lüma Kitchen & More" /></a>
+        <a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-sSfcr6vU2jHTsZ1A92euvDQ8RO6RpS.jpeg" alt="Lüma Kitchen & More" /></a>
         <div className="admin-actions"><button className="admin-lock" type="button" onClick={onLock}>Lock</button><button className="button button-outline" type="button" onClick={onBack}>Back to site <span>↗</span></button></div>
       </header>
       <main className="admin-content">
