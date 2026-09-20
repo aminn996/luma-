@@ -406,7 +406,8 @@ function MenuPage({ categories, category, setCategory, filteredMenu, onBack, onO
     <div className="menu-page">
       <header className="admin-header menu-page-header">
         <a className="wordmark" href="#home" onClick={onBack}><img className="wordmark-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-HwESmG9hmyji1cEdKLVdsOZT40ZIfs.jpeg" alt="Lüma Kitchen & More" /></a>
-        <button className="button button-outline" type="button" onClick={onBack}>Back to site <span>↗</span></button>
+        <div className="menu-header-actions">{cart.length > 0 && <button className="navbar-panier" type="button" onClick={openPanier} aria-label={`Open panier with ${cart.reduce((total, item) => total + item.quantity, 0)} items`}><span className="navbar-panier-count">{cart.reduce((total, item) => total + item.quantity, 0)}</span><span>Panier</span><span aria-hidden="true">↓</span></button>}<button className="button button-outline" type="button" onClick={onBack}>Back to site <span>↗</span></button></div>
+
       </header>
       <main className="menu-page-content">
         <div className="center-heading"><div className="section-kicker">Lüma / Full menu</div><h1>Made with care,<br /><em>served with heart.</em></h1><p>From breakfast and coffee to wood-fired favourites in El Kef.</p></div>
@@ -415,8 +416,6 @@ function MenuPage({ categories, category, setCategory, filteredMenu, onBack, onO
         <aside className="order-panel" id="order-panel"><div><div className="section-kicker">Your order</div><h2>{cart.length ? `${cart.reduce((total, item) => total + item.quantity, 0)} item${cart.reduce((total, item) => total + item.quantity, 0) === 1 ? '' : 's'}` : 'Choose your dishes'}</h2>{cart.length > 0 && <div className="order-items">{cart.map((item) => <div className="order-item" key={item.name}><span>{item.quantity} x {item.name}</span><button type="button" onClick={() => removeFromCart(item.name)} aria-label={`Remove one ${item.name}`}>−</button></div>)}</div>}</div><form className="order-form" onSubmit={submitOrder}><label>Name<input name="name" type="text" placeholder="Your full name" required /></label><label>Table number<input name="tableNumber" type="number" min="1" placeholder="e.g. 4" required /></label><label className="order-notes-field">Allergies or special requests<textarea name="allergyNotes" maxLength="500" placeholder="Please tell our kitchen about allergies or anything else we should know" rows="3" /></label><button className="button button-dark" type="submit">Send order <span>↗</span></button>{orderError && <p className="order-error" role="alert">Add at least one dish first.</p>}{orderSent && <p className="reservation-success" role="status">Order sent. The team will contact your table.</p>}</form></aside>
         <a className="button button-dark menu-page-book" href="#reservation" onClick={onBack}>Book a table <span>↗</span></a>
       </main>
-      <button className="floating-panier" type="button" onClick={openPanier} aria-label={`Open panier with ${cart.reduce((total, item) => total + item.quantity, 0)} items`}><span className="floating-panier-icon" aria-hidden="true">+</span><span><small>Your panier</small><strong>{cart.length ? `${cart.reduce((total, item) => total + item.quantity, 0)} item${cart.reduce((total, item) => total + item.quantity, 0) === 1 ? '' : 's'}` : 'Empty'}</strong></span><span className="floating-panier-arrow" aria-hidden="true">↑</span></button>
-
     </div>
   );
 }
